@@ -1,0 +1,17 @@
+# 后端主框架
+fastapi
+uvicorn[standard]
+gunicorn
+
+# 兼容配置
+pydantic<2.0.0
+
+# 常用依赖
+python-dotenv
+jinja2
+requests
+beautifulsoup4
+lxml
+html2text
+tiktoken
+email-validator

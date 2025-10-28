@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  email-summary-web:
+    build: .
+    container_name: ai-email-summary-web
+    restart: always
+    ports:
+      - "8000:8000"
+    # 挂载数据和日志卷，确保数据持久化
+    volumes:
+      - ./config.json:/app/config.json
+      - ./data:/app/data
+      - ./logs:/app/logs
+      # 注意：.env 文件包含敏感信息，通常不建议直接挂载，
+      # 而是通过环境变量注入。这里为了简化，假设用户会管理好 .env 文件。
+      # 更好的做法是使用 Docker Secrets 或 compose 的 env_file
+      - ./.env:/app/.env
+    environment:
+      # 确保容器内能读取 .env 文件
+      - PYTHONUNBUFFERED=1
+      - LOG_FILE=/app/logs/runtime.log

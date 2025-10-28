@@ -1,0 +1,28 @@
+# /etc/systemd/system/email-summary-web.service
+
+[Unit]
+Description=AI Email Summary Web Service
+After=network.target
+
+[Service]
+# 请根据实际情况修改 User 和 Group
+User=ubuntu
+Group=ubuntu
+# 假设项目部署在 /opt/email-summary-web
+WorkingDirectory=/opt/email-summary-web
+# 假设您已创建并激活了虚拟环境
+# ExecStart=/opt/email-summary-web/.venv/bin/gunicorn app:app --workers 4 --bind 0.0.0.0:8000 --worker-class uvicorn.workers.UvicornWorker
+# 或者使用 run_gunicorn.sh 脚本
+ExecStart=/bin/bash /opt/email-summary-web/run_gunicorn.sh
+
+# 自动重启
+Restart=always
+# 重启延迟
+RestartSec=5
+
+# 标准输出和错误输出到日志
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

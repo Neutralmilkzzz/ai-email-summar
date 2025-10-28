@@ -1,0 +1,287 @@
+好的小明！按我们刚定下的**方案 B（后端服务化 + 后台任务 + FastAPI + SSE + SQLite 幂等）**，下面是你可以**直接丢给另一个更善于 coding 的 AI**的“**一键生成网站**”超级 Prompt。
+（其中对 `AiEmailSummary.py` 的事实性引用已标注行号，便于它在实现时对齐原始逻辑与改造点。硬编码项包括 `TIME_GAP/EMAIL_* /DEEPSEEK_*`、主循环等，需要外部配置化并可控启停。 ；正文只解析 text/plain 且仅做 2000 字截断，需增强 HTML 支持与更合理的截断策略。）
+
+---
+
+# 🔧「构建 AI 邮件总结网站」最终交付指令（发给 Coding AI）
+
+你是一名资深全栈与平台工程师。请**从零生成一个可直接运行与部署的完整网站项目**，用于把我提供的 `AiEmailSummary.py`（已给出）包装成 Web 应用，实现：**在线配置 → 可控启停 → 实时日志 → 幂等去重处理 → 下载当日总结**。
+**必须输出所有文件完整源码，不得省略任何一行**（不要写“略/…”）。项目需在 **Python 3.8+** 运行良好，兼容 Windows 与 Linux。
+
+> 背景：
+> 现有脚本执行流程为：IMAP 获取未读 → 解析正文 → 调用 DeepSeek 概括 → 写当日 `txt` 总结文件 → 可选 SMTP 通知 → 循环轮询。脚本将关键配置硬编码在顶部常量中，需要改为外部配置/前端可写，并提供启停/观测与安全措施。 
+
+---
+
+## 1) 目标与约束
+
+* **目标**：把 `AiEmailSummary.py` 包装成网站，用户可在网页上：
+
+  1. 设置邮箱与 DeepSeek Key 等参数；
+  2. 启动/停止后台监控任务；
+  3. 实时查看程序日志（SSE/WebSocket 任一即可，建议 SSE）；
+  4. 下载当日总结文件（以及历史文件列表）。
+* **约束**：
+
+  * 不破坏原有功能闭环；
+  * 将所有硬编码配置改为**config.json + .env**（.env 仅存 Secrets）；
+  * **统一日志**、**状态可观测**、**幂等去重**（同一封邮件不重复总结）；
+  * 日志/前端页面**脱敏展示**，不可泄露密钥与邮箱授权码；
+  * 代码完整、可运行、可部署（本地/Gunicorn/Docker/systemd）。
+
+---
+
+## 2) 项目结构（请按此结构输出所有文件完整源码）
+
+```
+email_summary_web/
+├── app.py                         # FastAPI 入口（或 Flask，但建议 FastAPI）
+├── aiesvc/                        # 服务模块（对 AiEmailSummary 进行组件化封装）
+│   ├── __init__.py
+│   ├── config.py                  # 读取/校验配置（config.json + .env），脱敏工具
+│   ├── mailbox.py                 # IMAP 客户端（连接、搜索、取件、标记、重连）
+│   ├── parser.py                  # 邮件解析（支持 text/plain 与 HTML→text）
+│   ├── summarizer.py              # DeepSeek 提供者（请求、重试、速率、超时）
+│   ├── storage.py                 # 文件与 SQLite：总结文件写入、去重库表
+│   ├── notifier.py                # SMTP/可选；前端下载是主路径
+│   ├── runner.py                  # 后台任务（线程/事件），状态机与主循环
+│   └── logging_utils.py           # 结构化日志、RotatingFileHandler、SSE 适配
+├── static/
+│   ├── style.css                  # UI：白+浅蓝主题
+│   └── script.js                  # 前端逻辑（配置读写、启停、状态、SSE 日志、下载）
+├── templates/
+│   ├── index.html                 # 主页面（配置、控制、状态、日志、下载）
+│   └── login.html                 # 基础认证（可选：或用全局 BasicAuth 中间件）
+├── data/
+│   ├── summaries/                 # 当日/历史总结 txt（与原脚本保持一致）
+│   └── db.sqlite3                 # SQLite 数据库（处理幂等用）
+├── logs/
+│   └── runtime.log                # 统一运行日志（注意脱敏）
+├── AiEmailSummary.py              # 原脚本（需适度改造为可被 runner 复用）
+├── config.json                    # 可见配置（邮箱账号、刷新间隔等），无敏感值
+├── .env                           # 隐私配置（邮箱授权码、API Key、管理口令等）
+├── requirements.txt
+├── Dockerfile
+├── docker-compose.yml
+├── run_gunicorn.sh
+├── email-summary-web.service      # systemd 单元示例（Linux）
+└── README.md
+```
+
+---
+
+## 3) 详细实现要求
+
+### 3.1 配置（`aiesvc/config.py` + `config.json` + `.env`）
+
+* `config.json`（可见配置）：
+
+  * `TIME_GAP`（轮询间隔秒，默认 10）**映射原脚本常量**；
+  * `AMOUNT_OF_REPORT`（汇总包含的最近条数）；
+  * `IMAP_SERVER`、`IMAP_PORT`、`SMTP_SERVER`、`SMTP_PORT`、`DEEPSEEK_API_URL`（默认值与原脚本一致）。
+* `.env`（敏感配置，仅本地保存、不可在日志/前端明文暴露）：
+
+  * `EMAIL_ACCOUNT`、`EMAIL_PASSWORD`（163 授权码）
+  * `DEEPSEEK_API_KEY`（DeepSeek Key）
+  * `RECIPIENT_EMAIL`（是否发 SMTP 通知可配置开关）
+  * `ADMIN_PASSWORD`（网站管理口令，用于 BasicAuth）
+* 校验与脱敏：提供 `mask_secret()`，日志只展示前后 4 位。
+
+### 3.2 IMAP 客户端（`aiesvc/mailbox.py`）
+
+* 根据配置建立 SSL 连接与登录，选择 `INBOX`，支持失败重连。
+* 搜索未读（`UNSEEN`）；获取 **UID/Message-ID**，用于后续幂等。
+* **幂等策略**：
+
+  * SQLite 表 `processed_emails(uid TEXT, mailbox TEXT, message_id TEXT, processed_at DATETIME, summary_hash TEXT, PRIMARY KEY(mailbox, uid))`；
+  * 若 UID 已存在则跳过；处理成功后**可选**标记 `\Seen`；
+* 注意 IMAP 异常兜底（会话失效、网络抖动、状态不一致）。
+
+### 3.3 邮件解析（`aiesvc/parser.py`）
+
+* 在原 `parse_email` 基础上增强：
+
+  * 同时支持 `text/plain` 与 `text/html` → 纯文本（使用 `html2text` 或 `BeautifulSoup`）；当前版本仅处理 plain 并做 2000 字截断。
+  * 字符集鲁棒解码；保留主题与发件人；
+  * **Token 感知截断**：按模型上限预算，采用“首段 + 关键信息 + 尾段”拼接，避免只取前 2000 字。
+* 输出结构：`{subject, from, date, body_text, message_id, uid}`。
+
+### 3.4 DeepSeek 概括（`aiesvc/summarizer.py`）
+
+* 将原 `summarize_with_deepseek` 独立为 Provider，保留系统/User 模板与模型名（默认为 `deepseek-chat`）。
+* 加入：超时、指数退避重试、429/5xx 处理、QPS 限制、可选温控（默认 0.3）。
+* 返回 `summary_text`；异常时返回降级提示，但不崩溃主循环。
+
+### 3.5 存储（`aiesvc/storage.py`）
+
+* **总结文件**仍按原逻辑写入 `data/summaries/YYYY-MM-DD.txt`（迁移原 `get_today_summary_filename/update_daily_summary`）。
+* **SQLite 幂等库表**（见 3.2）；提供 `has_processed(uid)` / `mark_processed(...)`。
+
+### 3.6 通知（`aiesvc/notifier.py`）
+
+* 保留原 SMTP 汇总邮件能力为可选（默认关闭）。
+* 若开启：读取当日摘要，组装最近 `AMOUNT_OF_REPORT` 项后发送（沿用原逻辑并修正切片健壮性）。
+
+### 3.7 运行器（`aiesvc/runner.py`）
+
+* 用**后台线程 + 事件**实现可控启停：
+
+  * 状态机：`IDLE | RUNNING | STOPPING | ERROR`；
+  * `start()` 创建线程进入循环，`stop()` 置停止事件并等待优雅退出；
+  * 主循环：
+
+    1. 连接邮箱 → 搜索未读；
+    2. 对每封：解析 → 幂等检查 → 概括 → 写入总结 → 记账；
+    3. 每轮结束 sleep(`TIME_GAP`)；**确保按间隔执行**（考虑运行耗时）。
+* 所有关键步骤写**结构化日志**，供 SSE 实时推送与文件落盘。
+
+### 3.8 日志（`aiesvc/logging_utils.py`）
+
+* Python `logging` + `RotatingFileHandler`（例如 10MB*5 轮转）；
+* JSON 行日志（时间、级别、模块、事件、邮箱/域脱敏、错误栈等）；
+* 提供 SSE 队列适配：logger 写入时将行推送到内存队列，`/logs/stream` 端点消费。
+
+### 3.9 Web/API（`app.py` + 前端）
+
+* **API（FastAPI 推荐）**：
+
+  * `GET /`：渲染 `index.html`（Jinja2/静态页皆可）。
+  * `GET /config`：返回 `config.json`（敏感项置空或脱敏）。
+  * `POST /config`：保存配置（写 `config.json` 与 `.env` 中的变更，校验字段）。
+  * `POST /start`：启动后台任务（若已在跑则返回 409/提示）。
+  * `POST /stop`：优雅停止后台任务。
+  * `GET /status`：返回当前状态、最近一次成功拉取时间、累计处理数/失败数等指标。
+  * `GET /logs/stream`：**SSE** 输出实时日志（`text/event-stream`，心跳保持连接）。
+  * `GET /summaries/today`：返回当日 `txt` 文件内容（或下载）。
+  * `GET /summaries/list`：罗列历史文件名与下载链接。
+  * `GET /healthz`：健康检查。
+* **安全**：对 `POST /config /start /stop` 加 **BasicAuth**（口令 `ADMIN_PASSWORD` 来自 `.env`）。
+* **前端（`templates/index.html` + `static/script.js`）**：
+
+  * 表单：邮箱（账号/服务器/端口）、DeepSeek（Key/模型/超时）、轮询间隔、是否开启 SMTP 通知；
+  * 控制：启动/停止按钮、状态灯；
+  * **日志终端**：SSE 自动滚动；
+  * **下载区**：今日摘要预览 + 历史文件下载列表；
+  * UI 风格：白+浅蓝，简洁卡片式。
+
+---
+
+## 4) 对 `AiEmailSummary.py` 的改造要求（轻度入侵）
+
+* 把顶部硬编码常量全部改为**从 `aiesvc/config.py` 注入**（或通过构造 `Runner` 时的配置对象传入）；**不得在仓库内出现明文 Key/授权码**。
+* 将**核心步骤**（连接邮箱、取未读、解析、概括、写文件、可选通知）拆分为可复用函数，由 `aiesvc/runner.py` 调用；
+* 原 `main()` 仅保留为兼容入口（不再无限循环），实际循环由 `Runner` 线程负责。原实现为无限轮询 + sleep，需要迁移到“可控启停”的线程循环。
+* 解析层增强 HTML 支持，替代原来“只处理 text/plain 并截断 2000 字”的做法。
+* 概括层保留调用 DeepSeek 语义与消息模板；加入异常处理与重试策略。
+
+---
+
+## 5) 依赖与部署
+
+### 5.1 `requirements.txt`
+
+请列出并固定合理版本（兼容 Py3.8）：
+
+* fastapi, uvicorn[standard], python-dotenv, pydantic<2（或显式兼容）、jinja2
+* html2text 或 beautifulsoup4+lxml
+* requests, email-validator（可选）
+* aiosqlite 或 sqlite3（标准库）
+* python-multipart（如需上传）
+* gunicorn（生产）
+
+### 5.2 运行方式
+
+* **本地开发**：
+
+  ```bash
+  python -m venv .venv && . .venv/bin/activate   # Windows 用 .venv\Scripts\activate
+  pip install -r requirements.txt
+  uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+  ```
+* **生产（Gunicorn）**：
+
+  ```bash
+  bash ./run_gunicorn.sh
+  ```
+* **Docker**：提供 `Dockerfile` 与 `docker-compose.yml`，将 `data/` 与 `logs/` 设为卷。
+* **systemd**：提供 `email-summary-web.service` 示例（WorkingDirectory/ExecStart/Restart）。
+
+---
+
+## 6) 安全与合规
+
+* `.env`/`config.json` 均**仅存本机**；页面与日志中密钥/授权码**必须脱敏**；
+* CORS 默认关闭，除非配置允许；
+* 访问控制：**BasicAuth** 或单一登陆页（`/login`）。
+* 切勿把任何密钥写入前端代码与静态资源；
+* 日志中遇到异常时打印错误类型与上下文，但**绝不打印请求体中包含的 Key**。
+
+---
+
+## 7) 测试与验收清单（必须全部可用）
+
+1. **配置回写**：在 UI 修改配置，落 `config.json`/`.env`，刷新后能回显且脱敏。
+2. **启停可控**：点击“启动”→状态变为 RUNNING；点击“停止”→优雅退出，状态回到 IDLE。
+3. **实时日志**：SSE 流持续输出，1 分钟内无操作仍保持心跳，不丢行。
+4. **幂等去重**：对同一封未读邮件（UID 不变）只总结一次；重复上线不会重复。
+5. **HTML 邮件**：能正确抽取正文要点，不出现“空白/HTML 碎标签”。
+6. **长文截断**：使用 token 感知策略，摘要质量明显优于单纯前 2000 字（原实现）。
+7. **DeepSeek 异常**：模拟 429/超时，系统不中断，日志可见退避与降级提示。
+8. **下载**：可查看与下载“当日/历史”总结文件。
+9. **安全**：敏感字段永不明文显示；无认证的敏感 API 拒绝访问。
+10. **跨平台**：Windows 与 Linux 下路径与编码无差异性问题。
+
+---
+
+## 8) 输出格式要求（非常重要）
+
+请**一次性**输出**完整可运行项目的全部源码**，使用以下顺序与分节，**每个文件用独立代码块**，并在代码块前写明“相对路径 + 简短说明”：
+
+1. `app.py`
+2. `aiesvc/__init__.py`
+3. `aiesvc/config.py`
+4. `aiesvc/mailbox.py`
+5. `aiesvc/parser.py`
+6. `aiesvc/summarizer.py`
+7. `aiesvc/storage.py`
+8. `aiesvc/notifier.py`
+9. `aiesvc/runner.py`
+10. `aiesvc/logging_utils.py`
+11. `templates/index.html`
+12. `templates/login.html`（如采用登陆页方案）
+13. `static/style.css`
+14. `static/script.js`
+15. `requirements.txt`
+16. `Dockerfile`
+17. `docker-compose.yml`
+18. `run_gunicorn.sh`
+19. `email-summary-web.service`
+20. `README.md`
+21. （如果需要）对 `AiEmailSummary.py` 的改造版（建议保留原文件名并在顶部注释写明改造点）
+
+**不要省略任何文件的任何部分**（尤其是 HTML/JS/CSS 与脚本），并确保复制粘贴即可运行。
+
+---
+
+## 9) 质量标准
+
+* 代码含 **类型注解** 与关键处 **docstring**；
+* 日志结构化、可检索；
+* 关键函数含单元测试或可运行的最小“自检”脚本（如时间允许）；
+* 通过 `flake8`/`black`（或等价）基本规范检查；
+* 所有路径使用 `os.path`/`pathlib`，禁止硬编码绝对路径。
+
+---
+
+> 附：原脚本关键点（供对照）
+>
+> * 顶部硬编码配置（需外部化）：`TIME_GAP/AMOUNT_OF_REPORT/EMAIL_* /DEEPSEEK_* /SMTP_* /SUMMARY_DIR/LAST_UPDATE_FILE`。
+> * 仅处理 `text/plain` 与 2000 字截断（需增强 HTML 支持与智能截断）。
+> * DeepSeek Chat Completions 请求与取 `choices[0].message.content`。
+> * 主循环无限轮询 + `sleep(TIME_GAP)`（需迁至可控后台线程）。
+
+---
+
+**请严格按以上规范，完整输出整个项目源码。**
+
+—— 以上即全部需求。

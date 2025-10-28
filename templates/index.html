@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 邮件总结 Web</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>📧 AI 邮件总结 Web</h1>
+            <p>将您的邮件自动总结并存档</p>
+        </header>
+
+        <main class="main">
+            <!-- 配置卡片 -->
+            <section class="card config-card">
+                <h2>⚙️ 配置管理</h2>
+                <form id="configForm">
+                    <div class="form-group">
+                        <label for="imap_server">IMAP 服务器:</label>
+                        <input type="text" id="imap_server" name="IMAP_SERVER" placeholder="imap.example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="imap_port">IMAP 端口:</label>
+                        <input type="number" id="imap_port" name="IMAP_PORT" value="993">
+                    </div>
+                    <div class="form-group">
+                        <label for="email_account">邮箱账号:</label>
+                        <input type="email" id="email_account" name="EMAIL_ACCOUNT" placeholder="user@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="email_password">邮箱授权码:</label>
+                        <input type="password" id="email_password" name="EMAIL_PASSWORD" placeholder="授权码">
+                    </div>
+                    <div class="form-group">
+                        <label for="deepseek_api_url">DeepSeek API URL:</label>
+                        <input type="text" id="deepseek_api_url" name="DEEPSEEK_API_URL" placeholder="https://api.deepseek.com/v1/chat/completions">
+                    </div>
+                    <div class="form-group">
+                        <label for="deepseek_api_key">DeepSeek API Key:</label>
+                        <input type="password" id="deepseek_api_key" name="DEEPSEEK_API_KEY" placeholder="API Key">
+                    </div>
+                    <div class="form-group">
+                        <label for="deepseek_model">DeepSeek 模型:</label>
+                        <input type="text" id="deepseek_model" name="DEEPSEEK_MODEL" value="deepseek-chat">
+                    </div>
+                    <div class="form-group">
+                        <label for="time_gap">轮询间隔 (秒):</label>
+                        <input type="number" id="time_gap" name="TIME_GAP" value="10" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="amount_of_report">汇总邮件条数:</label>
+                        <input type="number" id="amount_of_report" name="AMOUNT_OF_REPORT" value="5" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="smtp_server">SMTP 服务器:</label>
+                        <input type="text" id="smtp_server" name="SMTP_SERVER" placeholder="smtp.example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="smtp_port">SMTP 端口:</label>
+                        <input type="number" id="smtp_port" name="SMTP_PORT" value="465">
+                    </div>
+                    <div class="form-group">
+                        <label for="recipient_email">收件人邮箱 (SMTP 通知):</label>
+                        <input type="email" id="recipient_email" name="RECIPIENT_EMAIL" placeholder="recipient@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="enable_smtp">
+                            <input type="checkbox" id="enable_smtp" name="ENABLE_SMTP_NOTIFIER">
+                            启用 SMTP 邮件通知
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="admin_password">管理口令:</label>
+                        <input type="password" id="admin_password" name="ADMIN_PASSWORD" placeholder="管理口令">
+                    </div>
+                    <button type="submit" class="btn btn-primary">💾 保存配置</button>
+                </form>
+            </section>
+
+            <!-- 控制卡片 -->
+            <section class="card control-card">
+                <h2>🎮 任务控制</h2>
+                <div class="status-display">
+                    <p>当前状态: <span id="statusBadge" class="badge badge-idle">IDLE</span></p>
+                    <p>最后成功时间: <span id="lastSuccessTime">--</span></p>
+                    <p>累计处理: <span id="totalProcessed">0</span> 封</p>
+                    <p>累计失败: <span id="totalFailed">0</span> 次</p>
+                </div>
+                <div class="button-group">
+                    <button id="startBtn" class="btn btn-success">▶️ 启动</button>
+                    <button id="stopBtn" class="btn btn-danger" disabled>⏹️ 停止</button>
+                    <button id="refreshBtn" class="btn btn-info">🔄 刷新状态</button>
+                </div>
+            </section>
+
+            <!-- 日志卡片 -->
+            <section class="card log-card">
+                <h2>📋 实时日志</h2>
+                <div id="logContainer" class="log-container">
+                    <p class="log-entry log-info">等待连接...</p>
+                </div>
+                <button id="clearLogsBtn" class="btn btn-secondary">🗑️ 清空日志</button>
+            </section>
+
+            <!-- 下载卡片 -->
+            <section class="card download-card">
+                <h2>📥 下载总结</h2>
+                <div id="summaryList" class="summary-list">
+                    <p>加载中...</p>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>&copy; 2025 AI Email Summary Web. All rights reserved.</p>
+        </footer>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

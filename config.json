@@ -1,0 +1,11 @@
+{
+    "TIME_GAP": 10,
+    "AMOUNT_OF_REPORT": 5,
+    "IMAP_SERVER": "imap.163.com",
+    "IMAP_PORT": 993,
+    "SMTP_SERVER": "smtp.163.com",
+    "SMTP_PORT": 465,
+    "DEEPSEEK_API_URL": "https://api.deepseek.com/v1/chat/completions",
+    "DEEPSEEK_MODEL": "deepseek-chat",
+    "ENABLE_SMTP_NOTIFIER": true
+}
