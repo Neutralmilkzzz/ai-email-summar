@@ -59,6 +59,20 @@ async def save_config(
     IMAP_PORT: int = Form(...),
     DEEPSEEK_API_KEY: str = Form(None),
 ):
+    new_conf = {
+        "EMAIL_ACCOUNT": EMAIL_ACCOUNT,
+        "EMAIL_PASSWORD": EMAIL_PASSWORD,
+        "RECIPIENT_EMAIL": RECIPIENT_EMAIL,
+        "SMTP_SERVER": SMTP_SERVER,
+        "SMTP_PORT": SMTP_PORT,
+        "IMAP_SERVER": IMAP_SERVER,
+        "IMAP_PORT": IMAP_PORT,
+        "DEEPSEEK_API_KEY": DEEPSEEK_API_KEY,
+    }
+
+    config_manager.save_user_config(new_conf)
+
+    return HTMLResponse("<h2>✅ 配置保存成功！请回主页重新启动服务。</h2>")
     """保存用户配置"""
     user_config = {
         "EMAIL_ACCOUNT": EMAIL_ACCOUNT,
