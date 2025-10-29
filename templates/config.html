@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>邮箱配置 - AI 邮件总结</title>
+    <style>
+        body {
+            font-family: "Microsoft YaHei", sans-serif;
+            margin: 40px auto;
+            max-width: 600px;
+            background: #f8f9fa;
+            color: #333;
+        }
+        h1 { text-align: center; color: #007bff; }
+        form { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 5px; }
+        button {
+            margin-top: 20px;
+            width: 100%;
+            background: #007bff;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>邮箱配置</h1>
+    <form action="/config/save" method="post">
+        <label>发件邮箱 (EMAIL_ACCOUNT)</label>
+        <input type="email" name="EMAIL_ACCOUNT" required>
+
+        <label>授权码 (EMAIL_PASSWORD)</label>
+        <input type="password" name="EMAIL_PASSWORD" required>
+
+        <label>收件邮箱 (RECIPIENT_EMAIL)</label>
+        <input type="email" name="RECIPIENT_EMAIL" required>
+
+        <label>SMTP服务器</label>
+        <input type="text" name="SMTP_SERVER" value="smtp.163.com" required>
+
+        <label>SMTP端口</label>
+        <input type="number" name="SMTP_PORT" value="465" required>
+
+        <label>IMAP服务器</label>
+        <input type="text" name="IMAP_SERVER" value="imap.163.com" required>
+
+        <label>IMAP端口</label>
+        <input type="number" name="IMAP_PORT" value="993" required>
+
+        <label>DeepSeek API Key</label>
+        <input type="text" name="DEEPSEEK_API_KEY">
+
+        <button type="submit">💾 保存配置</button>
+    </form>
+</body>
+</html>

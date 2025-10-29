@@ -32,6 +32,50 @@ app = FastAPI(
     version="2.0.0"
 )
 
+import json
+from fastapi import Form
+
+CONFIG_FILE = "user_config.json"
+
+@app.get("/config", response_class=HTMLResponse)
+async def config_page(request: Request):
+    """显示配置表单"""
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            user_config = json.load(f)
+    else:
+        user_config = {}
+    return templates.TemplateResponse("config.html", {"request": request, "config": user_config})
+
+
+@app.post("/config/save")
+async def save_config(
+    EMAIL_ACCOUNT: str = Form(...),
+    EMAIL_PASSWORD: str = Form(...),
+    RECIPIENT_EMAIL: str = Form(...),
+    SMTP_SERVER: str = Form(...),
+    SMTP_PORT: int = Form(...),
+    IMAP_SERVER: str = Form(...),
+    IMAP_PORT: int = Form(...),
+    DEEPSEEK_API_KEY: str = Form(None),
+):
+    """保存用户配置"""
+    user_config = {
+        "EMAIL_ACCOUNT": EMAIL_ACCOUNT,
+        "EMAIL_PASSWORD": EMAIL_PASSWORD,
+        "RECIPIENT_EMAIL": RECIPIENT_EMAIL,
+        "SMTP_SERVER": SMTP_SERVER,
+        "SMTP_PORT": SMTP_PORT,
+        "IMAP_SERVER": IMAP_SERVER,
+        "IMAP_PORT": IMAP_PORT,
+        "DEEPSEEK_API_KEY": DEEPSEEK_API_KEY,
+    }
+
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(user_config, f, ensure_ascii=False, indent=4)
+
+    return HTMLResponse("<h2>✅ 配置已保存成功！<br>请返回主页并重启服务。</h2>")
+
 # 静态文件 & 模板
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
